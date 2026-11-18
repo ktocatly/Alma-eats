@@ -92,9 +92,11 @@ h1, h2, h3, h4 { font-family: var(--display); font-weight: 700; margin: 0; lette
 .overline {
   margin: 0 0 10px; font: 600 0.68rem/1 var(--sans); letter-spacing: 0.18em; text-transform: uppercase; color: var(--muted);
 }
+/* Same letterforms as the section headings ("Allergens this week"), just larger:
+   lock the optical size to the headings' small size instead of the display cut. */
 h1 {
-  font-size: 2.75rem; line-height: 0.88; font-weight: 800; letter-spacing: -0.045em;
-  font-variation-settings: "opsz" 96;
+  font-size: clamp(2.2rem, 10.5vw, 2.75rem); line-height: 0.95; font-weight: 700; letter-spacing: -0.025em; white-space: nowrap;
+  font-variation-settings: "opsz" 18;
 }
 @media (min-width: 900px) {
   .hero { gap: 20px; }
