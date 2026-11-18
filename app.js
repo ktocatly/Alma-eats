@@ -102,7 +102,7 @@
       const pills = list.map((a) => {
         const fed = !pending.includes(a.id);
         return `<button type="button" class="pill ${fed ? "fed" : ""}" data-slot="${s.key}" data-id="${a.id}" ${state_ === "upcoming" ? "disabled" : ""} aria-pressed="${fed}">
-          <span class="tick">✓</span>${esc(shortName(a.name))}</button>`;
+          <span class="tick"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 12.5l3.8 3.8 7.2-8.1"/></svg></span>${esc(shortName(a.name))}</button>`;
       }).join("");
       return `<div class="slot ${state_ === "current" ? "current" : ""}">
         <div class="slot-head"><strong>${s.label} <span class="muted">· ${s.days}</span></strong>${status}</div>
@@ -116,14 +116,27 @@
     const slot = R.getSlots(new Date(), state.settings).find((s) => s.key === b.dataset.slot);
     const id = b.dataset.id;
     const inSlot = logsOf(id).filter((d) => d >= slot.start && d <= slot.end);
-    if (inSlot.length) {
+    const checking = !inSlot.length;
+    if (!checking) {
       removeLog(id, inSlot.at(-1));
     } else {
       const t = today();
       addLog(id, t >= slot.start && t <= slot.end ? t : slot.end);
-      toast(`${shortName(foodById(id).name)} checked off`);
     }
+    haptic();
     render();
+    const pill = document.querySelector(`.pill[data-slot="${slot.key}"][data-id="${CSS.escape(id)}"]`);
+    if (pill) {
+      pill.classList.add(checking ? "just" : "unjust");
+      if (checking) burst(pill.querySelector(".tick"), ["var(--sage)", "var(--peach)", "var(--butter-deep)"]);
+    }
+    if (checking) {
+      const slotEl = pill && pill.closest(".slot");
+      if (slotEl && slotEl.querySelector(".done")) {
+        slotEl.classList.add("celebrate");
+        toast(`All allergens done for the ${slot.key === "early" ? "first" : "second"} round 🎉`);
+      } else toast(`${shortName(foodById(id).name)} checked off`);
+    }
     clearReminderIfDone();
   });
 
@@ -140,6 +153,7 @@
   $("#chips").addEventListener("click", (e) => {
     const c = e.target.closest(".chip");
     if (!c) return;
+    if (c.dataset.cat !== filter) haptic();
     filter = c.dataset.cat;
     renderChips();
     renderList();
@@ -159,7 +173,7 @@
         <span class="sub">${sub}</span>
       </span>
       <span class="count" title="Times offered">${n ? n + "×" : ""}</span>
-      <button type="button" class="plus" data-plus="${f.id}" aria-label="Log ${esc(f.name)} today">+</button>
+      <button type="button" class="plus" data-plus="${f.id}" aria-label="Log ${esc(f.name)} today"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
     </div>`;
   }
 
@@ -189,9 +203,16 @@
       const f = foodById(id);
       const first = !logsOf(id).length;
       addLog(id);
+      haptic();
       render();
       const row = document.querySelector(`.item[data-id="${CSS.escape(id)}"]`);
-      row && row.classList.add("pop");
+      if (row) {
+        row.classList.add("pop");
+        row.querySelector(".count").classList.add("bump");
+        const btn = row.querySelector(".plus");
+        btn.classList.add("just");
+        burst(btn, first ? ["var(--sage)", "var(--peach)", "var(--butter-deep)", "var(--sage)"] : ["var(--sage)"], first ? 12 : 7);
+      }
       const n = logsOf(id).length;
       const msg = first
         ? (f.allergen ? `First ${shortName(f.name).toLowerCase()}! Added to the weekly rotation` : `First taste of ${shortName(f.name).toLowerCase()}!`)
@@ -235,6 +256,7 @@
   $("#fsLog").addEventListener("click", () => {
     const d = $("#fsDate").value || today();
     addLog(current, d);
+    haptic();
     fillFood();
     render();
     clearReminderIfDone();
@@ -521,6 +543,41 @@
     syncPush();
   });
   setInterval(checkReminders, 60 * 1000);
+
+  // ---------- Feel: haptics + little bursts ----------
+  // Android: vibrate. iPhone (iOS 18+): tapping a hidden native switch gives a light haptic tick.
+  const hapticLabel = (() => {
+    const l = document.createElement("label");
+    l.setAttribute("aria-hidden", "true");
+    l.style.cssText = "position:fixed;left:-200px;top:0;width:1px;height:1px;overflow:hidden;opacity:0;pointer-events:none";
+    const i = document.createElement("input");
+    i.type = "checkbox";
+    i.tabIndex = -1;
+    i.setAttribute("switch", "");
+    l.appendChild(i);
+    document.body.appendChild(l);
+    return l;
+  })();
+  function haptic() {
+    try { if (navigator.vibrate && navigator.vibrate(8)) return; } catch (_) {}
+    try { hapticLabel.click(); } catch (_) {}
+  }
+  function burst(el, colors, n = 8) {
+    if (!el || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const r = el.getBoundingClientRect();
+    const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+    for (let i = 0; i < n; i++) {
+      const p = document.createElement("span");
+      p.className = "spark";
+      const a = (Math.PI * 2 * i) / n + Math.random() * 0.5;
+      const d = 22 + Math.random() * 16;
+      p.style.cssText = `left:${cx}px;top:${cy}px;background:${colors[i % colors.length]};--dx:${Math.cos(a) * d}px;--dy:${Math.sin(a) * d}px`;
+      document.body.appendChild(p);
+      setTimeout(() => p.remove(), 650);
+    }
+  }
+  // Lets :active press styles show on iPhone
+  document.addEventListener("touchstart", () => {}, { passive: true });
 
   // ---------- Toast ----------
   let toastTimer;
