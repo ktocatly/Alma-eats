@@ -88,4 +88,4 @@
   }
 
   g.AlmaReminders = { DAY_NAMES, ymd, parseYmd, addDays, weekStart, getSlots, currentSlot, pendingInSlot, dueReminder, reminderText };
-})(typeof self !== "undefined" ? self : window);
+})(typeof globalThis !== "undefined" ? globalThis : self);

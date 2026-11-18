@@ -1,0 +1,12 @@
+{
+  "name": "alma-eats-push",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node test/webpush.test.mjs && node test/reminders.test.mjs"
+  },
+  "devDependencies": {
+    "wrangler": "4.155.0",
+    "http_ece": "1.2.1"
+  }
+}

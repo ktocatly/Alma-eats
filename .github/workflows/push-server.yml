@@ -1,0 +1,65 @@
+name: Push server
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "worker/**"
+      - "reminders.js"
+      - ".github/scripts/deploy-push.mjs"
+      - ".github/workflows/push-server.yml"
+
+permissions:
+  contents: write
+  pages: write
+
+concurrency:
+  group: push-server
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install and test
+        working-directory: worker
+        run: |
+          npm install --no-audit --no-fund
+          npm test
+
+      - name: Skip if Cloudflare isn't connected yet
+        if: env.CLOUDFLARE_API_TOKEN == '' || env.CLOUDFLARE_ACCOUNT_ID == ''
+        run: echo "::notice::Add CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID repository secrets to deploy the push server (see README)."
+
+      - name: Deploy to Cloudflare
+        if: env.CLOUDFLARE_API_TOKEN != '' && env.CLOUDFLARE_ACCOUNT_ID != ''
+        run: node .github/scripts/deploy-push.mjs
+
+      - name: Save server address in the app
+        if: env.CLOUDFLARE_API_TOKEN != '' && env.CLOUDFLARE_ACCOUNT_ID != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git checkout -- worker/wrangler.toml
+          if git diff --quiet -- push-config.js; then
+            echo "push-config.js unchanged"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add push-config.js
+          git commit -m "Point the app at the push server"
+          git push
+          # Pushes made by this workflow don't start a Pages build on their own
+          curl -fsS -X POST -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${{ github.repository }}/pages/builds" || echo "::warning::Couldn't trigger a Pages rebuild; it will update on the next push."

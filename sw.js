@@ -1,10 +1,10 @@
 /* Alma Eats service worker: offline shell + allergen reminders */
 importScripts("./reminders.js");
 
-const SHELL = "alma-shell-v3";
+const SHELL = "alma-shell";
 const STATE = "alma-state";
 const FILES = [
-  "./", "./index.html", "./styles.css", "./app.js", "./foods.js", "./reminders.js",
+  "./", "./index.html", "./styles.css", "./app.js", "./foods.js", "./reminders.js", "./push-config.js",
   "./manifest.webmanifest", "./img/alma-cutout.webp", "./img/icon-192.png", "./img/icon-512.png", "./img/favicon.png",
 ];
 
@@ -20,12 +20,13 @@ self.addEventListener("activate", (e) => {
   );
 });
 
-// Network first for the app files so updates land; fall back to cache offline.
+// Network first, skipping the browser's HTTP cache, so every open gets the latest
+// version; the cached copy is only used when offline.
 self.addEventListener("fetch", (e) => {
   const req = e.request;
   if (req.method !== "GET" || new URL(req.url).origin !== location.origin) return;
   e.respondWith(
-    fetch(req)
+    fetch(req.url, { cache: "no-cache", credentials: "same-origin" })
       .then((res) => {
         const copy = res.clone();
         caches.open(SHELL).then((c) => c.put(req, copy));
@@ -47,7 +48,8 @@ async function writeJSON(key, val) {
 
 async function checkAndNotify() {
   const snapshot = await readJSON("/__alma_state");
-  if (!snapshot) return;
+  // When the push server handles reminders, don't send duplicates from here.
+  if (!snapshot || snapshot.push) return;
   const meta = (await readJSON("/__alma_notified")) || {};
   const now = new Date();
   const due = AlmaReminders.dueReminder(now, snapshot, meta.last);
@@ -80,13 +82,22 @@ self.addEventListener("message", (e) => {
   }
 });
 
-// Ready for a server-sent Web Push later: show whatever payload arrives, or run the check.
+// Reminders sent by the push server (works even when the app is closed).
 self.addEventListener("push", (e) => {
-  let data = null;
-  try { data = e.data && e.data.json(); } catch (_) {}
-  e.waitUntil(data && data.title
-    ? self.registration.showNotification(data.title, { body: data.body, icon: "./img/icon-192.png", tag: "alma-allergens" })
-    : checkAndNotify());
+  let data = {};
+  try { data = (e.data && e.data.json()) || {}; } catch (_) {}
+  const title = data.title || "Alma Eats 🥄";
+  e.waitUntil(Promise.all([
+    self.registration.showNotification(title, {
+      body: data.body || "Time to check on this week's allergens.",
+      tag: data.tag || "alma-allergens",
+      renotify: true,
+      icon: "./img/icon-192.png",
+      badge: "./img/icon-192.png",
+      data: { url: data.url || "./#week" },
+    }),
+    data.tag === "alma-test" ? null : writeJSON("/__alma_notified", { last: AlmaReminders.ymd(new Date()) }),
+  ]));
 });
 
 self.addEventListener("notificationclick", (e) => {

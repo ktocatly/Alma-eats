@@ -1,0 +1,17 @@
+# Alma Eats push server. Deployed by .github/workflows/push-server.yml,
+# which fills in the KV namespace id and the VAPID secrets automatically.
+name = "alma-eats-push"
+main = "src/index.js"
+compatibility_date = "2026-10-01"
+workers_dev = true
+
+[vars]
+ALLOWED_ORIGINS = "https://ktocatly.github.io"
+VAPID_SUBJECT = "https://ktocatly.github.io/Alma-eats/"
+
+[triggers]
+crons = ["*/10 * * * *"]
+
+[[kv_namespaces]]
+binding = "ALMA"
+id = "__KV_ID__"

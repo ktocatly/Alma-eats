@@ -15,6 +15,35 @@ It's a static site with no build step. Serve the folder over HTTPS (for example 
 
 Local preview: `python3 -m http.server` and open http://localhost:8000.
 
-## About notifications
+## Updates
 
-The service worker checks for reminders whenever the app is opened and every minute while it's open or running in the background. On Android/Chrome it also uses Periodic Background Sync to check about once an hour while closed. iOS doesn't let web apps wake up in the background without a push server, so iPhone reminders show when the app is open or recently backgrounded. The service worker already handles `push` events, so a small Web Push server can be added later for fully closed-app reminders.
+Every time the app is opened (or brought back to the foreground) it checks for a new version and, if there is one, reloads itself once. You never need to remove and re-add the home-screen app to get changes. The only exception is the home-screen **icon**, which iPhones capture once when the app is added.
+
+## Push reminders
+
+Reminders that arrive even when the app is closed come from a tiny free server on Cloudflare Workers (`worker/`). The app sends it the reminder settings and the allergens in rotation (with feeding dates) whenever they change. Every 10 minutes it checks, in your own time zone, whether a reminder is due, and sends a Web Push. Nothing else leaves the phone.
+
+Without the server, reminders still show while the app is open or was recently used.
+
+### One-time setup (about 5 minutes)
+
+1. **Create a free Cloudflare account** at https://dash.cloudflare.com/sign-up.
+2. **Copy your Account ID**: in the dashboard, open **Workers & Pages**. The Account ID is shown on the right (or use the ⋯ menu next to your account name → *Copy account ID*).
+3. **Create an API token**: profile icon → **My Profile → API Tokens → Create Token** → use the **Edit Cloudflare Workers** template. Under *Account Resources* pick your account and under *Zone Resources* pick *All zones*. Then **Continue → Create Token** and copy it.
+4. **Add both to GitHub**: this repo → **Settings → Secrets and variables → Actions → New repository secret**:
+   - `CLOUDFLARE_API_TOKEN`: the token
+   - `CLOUDFLARE_ACCOUNT_ID`: the account ID
+5. **Deploy**: **Actions** tab → **Push server** → **Run workflow**.
+
+The workflow creates the storage, a `workers.dev` address and the signing keys, deploys the server, and writes its address into `push-config.js`. After a minute the site updates. Open Alma Eats from your home screen: if reminders are on, it connects automatically (otherwise tap the bell and turn them on). **Send a test notification** then goes through the server.
+
+Later changes to the server deploy automatically when pushed to `main`.
+
+### Developing the server
+
+```
+cd worker
+npm install
+npm test          # encryption checked against http_ece, plus the reminder schedule
+npx wrangler dev  # needs a .dev.vars with VAPID_PRIVATE_JWK and VAPID_PUBLIC_KEY
+```

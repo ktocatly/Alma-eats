@@ -25,6 +25,7 @@
   function save() {
     try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (_) {}
     syncSnapshot();
+    syncPushSoon();
   }
 
   const today = () => R.ymd(new Date());
@@ -291,6 +292,72 @@
   $("#setEarly").innerHTML = dayOpts(0, 5);
   $("#setLate").innerHTML = dayOpts(1, 6);
 
+  // ---------- Push (server-sent reminders that arrive even when the app is closed) ----------
+  const PUSH_URL = (window.ALMA_PUSH_URL || "").replace(/\/$/, "");
+  const DEVICE_KEY = "alma-eats-device";
+  function pushCapable() { return !!PUSH_URL && "serviceWorker" in navigator && "PushManager" in window; }
+  function device() {
+    let d = null;
+    try { d = JSON.parse(localStorage.getItem(DEVICE_KEY)); } catch (_) {}
+    if (!d || !d.id) {
+      const rand = () => Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) => b.toString(16).padStart(2, "0")).join("");
+      d = { id: rand(), token: rand() + rand(), push: false };
+      saveDevice(d);
+    }
+    return d;
+  }
+  function saveDevice(d) { try { localStorage.setItem(DEVICE_KEY, JSON.stringify(d)); } catch (_) {} }
+  function pushActive() { return pushCapable() && state.settings.enabled && device().push; }
+
+  async function postPush(path, extra = {}) {
+    const d = device();
+    const res = await fetch(PUSH_URL + path, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ id: d.id, token: d.token, ...extra }),
+    });
+    if (!res.ok) throw new Error(`push server ${res.status}`);
+    return res.json();
+  }
+  function b64ToBytes(s) {
+    const b = atob(s.replace(/-/g, "+").replace(/_/g, "/") + "===".slice((s.length + 3) % 4));
+    return Uint8Array.from(b, (c) => c.charCodeAt(0));
+  }
+  async function subscribePush() {
+    const reg = await swReady();
+    if (!reg) throw new Error("no service worker");
+    let sub = await reg.pushManager.getSubscription();
+    if (!sub) {
+      const { publicKey } = await (await fetch(PUSH_URL + "/vapid")).json();
+      sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToBytes(publicKey) });
+    }
+    return sub;
+  }
+  async function syncPush() {
+    if (!pushCapable() || !state.settings.enabled) return;
+    try {
+      const sub = await subscribePush();
+      await postPush("/sync", {
+        subscription: sub.toJSON(),
+        snapshot: snapshotData(),
+        tz: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      });
+      const d = device();
+      if (!d.push) { d.push = true; saveDevice(d); syncSnapshot(); }
+    } catch (err) {
+      console.warn("Push sync failed", err);
+    }
+  }
+  let pushTimer;
+  function syncPushSoon() { clearTimeout(pushTimer); pushTimer = setTimeout(syncPush, 1200); }
+  async function disablePush() {
+    const d = device();
+    try { if (PUSH_URL) await postPush("/unsubscribe"); } catch (_) {}
+    try { const reg = await swReady(); const sub = reg && (await reg.pushManager.getSubscription()); if (sub) await sub.unsubscribe(); } catch (_) {}
+    d.push = false; saveDevice(d);
+  }
+
+  // ---------- Settings ----------
   function fillSettings() {
     const s = state.settings;
     $("#setEnabled").checked = s.enabled && notifPermission() === "granted";
@@ -299,13 +366,14 @@
     $("#setLate").value = s.lateDay;
     const p = notifPermission();
     $("#permNote").textContent =
-      p === "unsupported" ? "This browser can't show notifications"
-      : p === "denied" ? "Blocked — allow notifications in your browser settings"
-      : $("#setEnabled").checked ? `On · daily nudge at ${fmtTime(s.time)} until checked off` : "Notifications are off";
+      p === "unsupported" ? (isIOS && !standalone ? "Add to your Home Screen first" : "This browser can't show notifications")
+      : p === "denied" ? "Blocked — allow notifications in your phone's settings"
+      : !$("#setEnabled").checked ? "Notifications are off"
+      : pushActive() ? `On · ${fmtTime(s.time)}, even when the app is closed`
+      : `On · ${fmtTime(s.time)} while the app is open`;
     let hint = "";
-    if (isIOS && !standalone) hint = "On iPhone: tap Share → Add to Home Screen, then open Alma Eats from your home screen to turn on notifications.";
-    else if (!("periodicSync" in (navigator.serviceWorker ? ServiceWorkerRegistration.prototype : {})))
-      hint = "Reminders pop up when Alma Eats is open or running in the background. Keep it on your home screen and open it daily for the most reliable nudges.";
+    if (isIOS && !standalone) hint = "On iPhone: open this page in Safari, tap Share → Add to Home Screen, then open Alma Eats from your home screen to turn on notifications.";
+    else if (!PUSH_URL && $("#setEnabled").checked) hint = "The push server isn't set up yet, so reminders only appear while Alma Eats is open or was recently used.";
     $("#installHint").textContent = hint;
   }
   $("#bellBtn").addEventListener("click", () => { fillSettings(); $("#settingsSheet").showModal(); });
@@ -316,11 +384,16 @@
       if (p === "default") p = await Notification.requestPermission();
       if (p !== "granted") { e.target.checked = false; state.settings.enabled = false; save(); fillSettings(); renderWeek(); return; }
       state.settings.enabled = true;
+      save();
+      $("#permNote").textContent = "Connecting…";
       await registerPeriodic();
+      await syncPush();
+      if (pushCapable() && !device().push) toast("Couldn't reach the reminder server — try again in a bit");
     } else {
       state.settings.enabled = false;
+      save();
+      await disablePush();
     }
-    save();
     fillSettings();
     renderWeek();
     checkReminders();
@@ -340,6 +413,13 @@
     let p = notifPermission();
     if (p === "default") p = await Notification.requestPermission();
     if (p !== "granted") { toast("Notifications aren't allowed yet"); fillSettings(); return; }
+    if (pushActive()) {
+      try {
+        const r = await postPush("/test");
+        toast(r.ok ? "Sent from the server — it should arrive in a moment" : "The server couldn't deliver it");
+      } catch (_) { toast("Couldn't reach the reminder server"); }
+      return;
+    }
     const reg = await swReady();
     if (reg && reg.active) reg.active.postMessage({ type: "test" });
     else new Notification("Alma Eats 🥄", { body: "Reminders are working!", icon: "img/icon-192.png" });
@@ -374,13 +454,17 @@
     if (!("serviceWorker" in navigator)) return Promise.resolve(null);
     return regPromise || Promise.resolve(null);
   }
-  async function syncSnapshot() {
-    if (!("caches" in window)) return;
-    const snapshot = {
+  function snapshotData() {
+    return {
       settings: state.settings,
       allergens: rotation().map((f) => ({ id: f.id, name: f.name })),
       logs: Object.fromEntries(rotation().map((f) => [f.id, logsOf(f.id)])),
     };
+  }
+  async function syncSnapshot() {
+    if (!("caches" in window)) return;
+    // When the server is sending reminders, the service worker stays quiet to avoid doubles.
+    const snapshot = { ...snapshotData(), push: pushActive() };
     try {
       const c = await caches.open("alma-state");
       await c.put("/__alma_state", new Response(JSON.stringify(snapshot), { headers: { "content-type": "application/json" } }));
@@ -407,11 +491,35 @@
     } catch (_) {}
   }
 
+  // ---------- Updates: look for a new version every time the app is opened ----------
   if ("serviceWorker" in navigator && location.protocol !== "file:") {
-    regPromise = navigator.serviceWorker.register("sw.js").then(() => navigator.serviceWorker.ready).catch(() => null);
-    regPromise.then((reg) => { if (reg && state.settings.enabled) registerPeriodic(); checkReminders(); });
+    const hadController = !!navigator.serviceWorker.controller;
+    let reloading = false;
+    navigator.serviceWorker.addEventListener("controllerchange", () => {
+      // A new version took over. Reload once so the fresh files are used (not on first install).
+      if (!hadController || reloading) return;
+      reloading = true;
+      location.reload();
+    });
+    regPromise = navigator.serviceWorker.register("sw.js", { updateViaCache: "none" })
+      .then(() => navigator.serviceWorker.ready).catch(() => null);
+    regPromise.then((reg) => {
+      if (reg && state.settings.enabled) registerPeriodic();
+      checkReminders();
+      syncPush();
+    });
   }
-  document.addEventListener("visibilitychange", () => { if (!document.hidden) { render(); checkReminders(); } });
+  async function checkForUpdate() {
+    const reg = await swReady();
+    try { if (reg) await reg.update(); } catch (_) {}
+  }
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) return;
+    render();
+    checkReminders();
+    checkForUpdate();
+    syncPush();
+  });
   setInterval(checkReminders, 60 * 1000);
 
   // ---------- Toast ----------
