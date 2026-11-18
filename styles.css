@@ -64,34 +64,34 @@ h1, h2, h3, h4 { font-family: var(--serif); font-weight: 650; margin: 0; letter-
 }
 
 /* ---- Hero ---- */
-.hero { display: flex; align-items: center; gap: 18px; }
-.photo {
-  flex: none;
-  margin: 0;
-  width: 108px;
-  aspect-ratio: 4 / 5;
-  border: 2px solid var(--ink);
-  border-radius: 3px;
-  padding: 4px;
-  background: var(--surface);
-  overflow: hidden;
+.hero { display: flex; align-items: flex-end; gap: 18px; padding-top: 4px; }
+/* Circle with a thin ink ring; Alma's head breaks out over the top edge. */
+.portrait { position: relative; flex: none; width: 124px; aspect-ratio: 1 / 1.25; }
+.portrait::before {
+  content: ""; position: absolute; left: 0; right: 0; bottom: 0; aspect-ratio: 1;
+  border-radius: 50%; background: var(--sage-soft); border: 1.5px solid var(--ink);
 }
-.photo img { width: 100%; height: 100%; object-fit: cover; object-position: 50% 35%; display: block; border-radius: 1px; }
-.hero-text { min-width: 0; }
+.portrait-clip {
+  position: absolute; inset: 0;
+  -webkit-mask-image: linear-gradient(#000, #000), radial-gradient(closest-side, #000 calc(100% - 1.5px), transparent calc(100% - 1px));
+  mask-image: linear-gradient(#000, #000), radial-gradient(closest-side, #000 calc(100% - 1.5px), transparent calc(100% - 1px));
+  -webkit-mask-size: 100% 60%, 100% 80%; mask-size: 100% 60%, 100% 80%;
+  -webkit-mask-position: top, bottom; mask-position: top, bottom;
+  -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat;
+}
+.portrait img { position: absolute; bottom: 0; left: -6%; width: 112%; display: block; }
+.hero-text { min-width: 0; padding-bottom: 6px; }
 .overline {
-  margin: 0 0 8px; font: 600 0.68rem/1 var(--sans); letter-spacing: 0.18em; text-transform: uppercase; color: var(--muted);
+  margin: 0 0 10px; font: 600 0.68rem/1 var(--sans); letter-spacing: 0.18em; text-transform: uppercase; color: var(--muted);
 }
 h1 {
-  font-size: 2.4rem; line-height: 0.95; font-weight: 500; letter-spacing: -0.035em;
+  font-size: 2.6rem; line-height: 0.92; font-weight: 500; letter-spacing: -0.035em;
   font-variation-settings: "opsz" 144;
 }
-.tagline {
-  margin: 12px 0 0; padding-top: 10px; border-top: 1px solid var(--ink); color: var(--muted); font-size: 0.9rem;
-}
 @media (min-width: 900px) {
-  .hero { flex-direction: column; align-items: stretch; gap: 24px; }
-  .photo { width: 100%; aspect-ratio: 4 / 3; padding: 6px; }
-  h1 { font-size: 3.4rem; }
+  .hero { gap: 20px; }
+  .portrait { width: 150px; }
+  h1 { font-size: 3rem; }
 }
 
 /* ---- Stats ---- */

@@ -1,11 +1,11 @@
 /* Alma Eats service worker: offline shell + allergen reminders */
 importScripts("./reminders.js");
 
-const SHELL = "alma-shell-v1";
+const SHELL = "alma-shell-v2";
 const STATE = "alma-state";
 const FILES = [
   "./", "./index.html", "./styles.css", "./app.js", "./foods.js", "./reminders.js",
-  "./manifest.webmanifest", "./img/alma.jpg", "./img/icon-192.png", "./img/icon-512.png", "./img/favicon.png",
+  "./manifest.webmanifest", "./img/alma-cutout.webp", "./img/icon-192.png", "./img/icon-512.png", "./img/favicon.png",
 ];
 
 self.addEventListener("install", (e) => {
