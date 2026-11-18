@@ -1,7 +1,7 @@
 /* Alma Eats service worker: offline shell + allergen reminders */
 importScripts("./reminders.js");
 
-const SHELL = "alma-shell-v2";
+const SHELL = "alma-shell-v3";
 const STATE = "alma-state";
 const FILES = [
   "./", "./index.html", "./styles.css", "./app.js", "./foods.js", "./reminders.js",
