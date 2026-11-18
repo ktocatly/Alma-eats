@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Alma Eats</title>
+  <meta name="description" content="Track every first bite and keep allergens in the weekly rotation." />
+  <meta name="theme-color" content="#FBF6EE" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" href="img/favicon.png" />
+  <link rel="apple-touch-icon" href="img/apple-touch-icon.png" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-title" content="Alma Eats" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,650&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="layout">
+    <aside class="side">
+      <div class="hero">
+        <div class="arch"><img src="img/alma.jpg" alt="Alma grinning in her high chair with avocado on her chin" /></div>
+        <div class="hero-text">
+          <h1>Alma Eats</h1>
+          <p class="tagline">Every first bite, one happy mess at a time.</p>
+        </div>
+      </div>
+
+      <div class="stats">
+        <div class="stat">
+          <span class="stat-num" id="statFoods">0</span>
+          <span class="stat-label" id="statFoodsLabel">foods tried</span>
+          <div class="bar"><span id="barFoods"></span></div>
+        </div>
+        <div class="stat">
+          <span class="stat-num" id="statAllergens">0</span>
+          <span class="stat-label" id="statAllergensLabel">allergens in</span>
+          <div class="bar allergen"><span id="barAllergens"></span></div>
+        </div>
+      </div>
+
+      <section class="card week" id="week" aria-labelledby="weekTitle">
+        <div class="card-head">
+          <div>
+            <h2 id="weekTitle">Allergens this week</h2>
+            <p class="muted" id="weekRange"></p>
+          </div>
+          <button class="bell" id="bellBtn" type="button" aria-label="Reminder settings">
+            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M12 22a2.5 2.5 0 0 0 2.45-2h-4.9A2.5 2.5 0 0 0 12 22Zm7-6V11a7 7 0 0 0-5.5-6.84V3.5a1.5 1.5 0 0 0-3 0v.66A7 7 0 0 0 5 11v5l-2 2v1h18v-1l-2-2Z"/></svg>
+            <span id="bellLabel">Off</span>
+          </button>
+        </div>
+        <div id="slots" class="slots"></div>
+      </section>
+    </aside>
+
+    <main class="main">
+      <div class="toolbar">
+        <label class="search">
+          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M10 3a7 7 0 1 1-4.4 12.45l-3.3 3.3-1.4-1.4 3.3-3.3A7 7 0 0 1 10 3Zm0 2a5 5 0 1 0 0 10 5 5 0 0 0 0-10Z"/></svg>
+          <input id="search" type="search" placeholder="Search foods" autocomplete="off" />
+        </label>
+        <div class="chips" id="chips" role="tablist" aria-label="Filter by category"></div>
+        <label class="toggle-untried"><input type="checkbox" id="untried" /> <span>Not tried</span></label>
+      </div>
+
+      <div id="list" class="list"></div>
+
+      <button class="add-food" id="addFoodBtn" type="button">+ Add a food</button>
+    </main>
+  </div>
+
+  <!-- Food detail -->
+  <dialog id="foodSheet" class="sheet">
+    <form method="dialog" class="sheet-inner" id="foodForm">
+      <button class="close" value="close" aria-label="Close">×</button>
+      <div class="sheet-title">
+        <span class="big-emoji" id="fsEmoji"></span>
+        <div>
+          <h3 id="fsName"></h3>
+          <p class="muted" id="fsMeta"></p>
+        </div>
+      </div>
+      <div class="log-row">
+        <input type="date" id="fsDate" aria-label="Date fed" />
+        <button type="button" class="btn primary" id="fsLog">Log a feeding</button>
+      </div>
+      <label class="switch-row" id="fsRotationRow">
+        <span>
+          <strong>Keep in weekly rotation</strong>
+          <small class="muted">Remind me to offer this twice a week</small>
+        </span>
+        <input type="checkbox" id="fsRotation" class="switch" />
+      </label>
+      <h4>History</h4>
+      <ul class="history" id="fsHistory"></ul>
+      <button type="button" class="link danger" id="fsDelete">Remove this food</button>
+    </form>
+  </dialog>
+
+  <!-- Add food -->
+  <dialog id="addSheet" class="sheet">
+    <form method="dialog" class="sheet-inner" id="addForm">
+      <button class="close" value="close" aria-label="Close">×</button>
+      <h3>Add a food</h3>
+      <label class="field"><span>Name</span><input id="afName" required maxlength="40" placeholder="e.g. Dragon fruit" /></label>
+      <div class="field-row">
+        <label class="field"><span>Emoji</span><input id="afEmoji" maxlength="4" placeholder="🍽️" /></label>
+        <label class="field grow"><span>Group</span><select id="afCat"></select></label>
+      </div>
+      <label class="switch-row">
+        <span><strong>It's an allergen</strong><small class="muted">Adds it to the twice-weekly rotation once introduced</small></span>
+        <input type="checkbox" id="afAllergen" class="switch" />
+      </label>
+      <button class="btn primary wide" id="afSave" value="save">Add food</button>
+    </form>
+  </dialog>
+
+  <!-- Settings -->
+  <dialog id="settingsSheet" class="sheet">
+    <form method="dialog" class="sheet-inner">
+      <button class="close" value="close" aria-label="Close">×</button>
+      <h3>Allergen reminders</h3>
+      <p class="muted small">Once an allergen has been introduced, Alma Eats nudges you twice a week: once early in the week and once later. If it isn't checked off, it reminds you again each day until it is.</p>
+
+      <label class="switch-row">
+        <span><strong>Reminders</strong><small class="muted" id="permNote">Notifications are off</small></span>
+        <input type="checkbox" id="setEnabled" class="switch" />
+      </label>
+
+      <div class="field-row">
+        <label class="field"><span>Time of day</span><input type="time" id="setTime" /></label>
+      </div>
+      <div class="field-row">
+        <label class="field grow"><span>First round starts</span><select id="setEarly"></select></label>
+        <label class="field grow"><span>Second round starts</span><select id="setLate"></select></label>
+      </div>
+      <button type="button" class="btn ghost wide" id="testNotif">Send a test notification</button>
+      <p class="hint" id="installHint"></p>
+
+      <h4>Backup</h4>
+      <p class="muted small">Everything is saved on this device. Export a backup to move it to another phone.</p>
+      <div class="field-row">
+        <button type="button" class="btn ghost grow" id="exportBtn">Export</button>
+        <label class="btn ghost grow file-btn">Import<input type="file" id="importInput" accept="application/json" /></label>
+      </div>
+    </form>
+  </dialog>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script src="foods.js"></script>
+  <script src="reminders.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
