@@ -140,6 +140,37 @@
     clearReminderIfDone();
   });
 
+  // ---------- Try next ----------
+  let skipped = [];
+  function renderNext() {
+    const ranked = window.AlmaSuggest.rank(foods(), state.logs, window.ALMA_FOOD_META || {}, today(), skipped);
+    const pick = ranked[0];
+    $("#next").hidden = !pick;
+    if (!pick) return;
+    const f = pick.food;
+    $("#nextBody").innerHTML = `
+      <span class="emo ${f.allergen ? "allergen" : ""}" aria-hidden="true">${esc(f.emoji || "🥄")}</span>
+      <span class="next-text">
+        <span class="next-name">${esc(f.name)}</span>
+        <span class="next-why">${esc(pick.reason)}</span>
+        ${pick.tip ? `<span class="next-tip">${esc(pick.tip)}</span>` : ""}
+      </span>
+      <button type="button" class="plus" data-next="${f.id}" aria-label="Log ${esc(f.name)} today"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>`;
+  }
+  $("#nextSkip").addEventListener("click", () => {
+    const cur = $("#nextBody [data-next]");
+    if (cur) skipped.push(cur.dataset.next);
+    if (!window.AlmaSuggest.rank(foods(), state.logs, window.ALMA_FOOD_META || {}, today(), skipped).length) skipped = [];
+    haptic();
+    renderNext();
+    $("#nextBody").classList.remove("swap"); void $("#nextBody").offsetWidth; $("#nextBody").classList.add("swap");
+  });
+  $("#nextBody").addEventListener("click", (e) => {
+    const b = e.target.closest("[data-next]");
+    if (b) { logFood(b.dataset.next, b); return; }
+    if (e.target.closest(".next-text")) openFood($("#nextBody [data-next]").dataset.next);
+  });
+
   // ---------- Render: list ----------
   let filter = "all";
   let query = "";
@@ -198,32 +229,34 @@
 
   $("#list").addEventListener("click", (e) => {
     const plus = e.target.closest("[data-plus]");
-    if (plus) {
-      const id = plus.dataset.plus;
-      const f = foodById(id);
-      const first = !logsOf(id).length;
-      addLog(id);
-      haptic();
-      render();
-      const row = document.querySelector(`.item[data-id="${CSS.escape(id)}"]`);
-      if (row) {
-        row.classList.add("pop");
-        row.querySelector(".count").classList.add("bump");
-        const btn = row.querySelector(".plus");
-        btn.classList.add("just");
-        burst(btn, first ? ["var(--sage)", "var(--peach)", "var(--butter-deep)", "var(--sage)"] : ["var(--sage)"], first ? 12 : 7);
-      }
-      const n = logsOf(id).length;
-      const msg = first
-        ? (f.allergen ? `First ${shortName(f.name).toLowerCase()}! Added to the weekly rotation` : `First taste of ${shortName(f.name).toLowerCase()}!`)
-        : `${shortName(f.name)} · ${n}×`;
-      toast(msg, () => { removeLog(id, today()); render(); });
-      clearReminderIfDone();
-      return;
-    }
+    if (plus) { logFood(plus.dataset.plus); return; }
     const open = e.target.closest("[data-open]");
     if (open) openFood(open.dataset.open);
   });
+  // Log a feeding for today. fromNext is the "Try next" button, if that's where it came from.
+  function logFood(id, fromNext) {
+    const f = foodById(id);
+    const first = !logsOf(id).length;
+    if (fromNext) burst(fromNext, ["var(--sage)", "var(--peach)", "var(--butter-deep)", "var(--sage)"], 12);
+    addLog(id);
+    haptic();
+    render();
+    const row = document.querySelector(`.item[data-id="${CSS.escape(id)}"]`);
+    if (row && !fromNext) {
+      row.classList.add("pop");
+      row.querySelector(".count").classList.add("bump");
+      const btn = row.querySelector(".plus");
+      btn.classList.add("just");
+      burst(btn, first ? ["var(--sage)", "var(--peach)", "var(--butter-deep)", "var(--sage)"] : ["var(--sage)"], first ? 12 : 7);
+    }
+    const n = logsOf(id).length;
+    const msg = first
+      ? (f.allergen ? `First ${shortName(f.name).toLowerCase()}! Added to the weekly rotation` : `First taste of ${shortName(f.name).toLowerCase()}!`)
+      : `${shortName(f.name)} · ${n}×`;
+    toast(msg, () => { removeLog(id, today()); render(); });
+    clearReminderIfDone();
+    if (fromNext) { $("#nextBody").classList.remove("swap"); void $("#nextBody").offsetWidth; $("#nextBody").classList.add("swap"); }
+  }
   $("#list").addEventListener("keydown", (e) => {
     if ((e.key === "Enter" || e.key === " ") && e.target.dataset.open) { e.preventDefault(); openFood(e.target.dataset.open); }
   });
@@ -597,6 +630,7 @@
   function render() {
     renderStats();
     renderWeek();
+    renderNext();
     renderList();
   }
   renderChips();

@@ -4,7 +4,7 @@ importScripts("./reminders.js");
 const SHELL = "alma-shell";
 const STATE = "alma-state";
 const FILES = [
-  "./", "./index.html", "./styles.css", "./app.js", "./foods.js", "./reminders.js", "./push-config.js",
+  "./", "./index.html", "./styles.css", "./app.js", "./foods.js", "./reminders.js", "./suggest.js", "./push-config.js",
   "./manifest.webmanifest", "./img/alma-cutout.webp", "./img/icon-192.png", "./img/icon-512.png", "./img/favicon.png",
 ];
 
